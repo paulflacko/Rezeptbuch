@@ -10,6 +10,7 @@ Persönliches Rezeptbuch mit schnellen Alltagsgerichten: überwiegend vegetarisc
 - Veggie-Tausch-Tipps bei Fleischrezepten
 - Wochenplan mit Flexi-Ziel (max. Fleischgerichte/Woche) und automatischem Auffüllen
 - Einkaufsliste (fasst gleiche Zutaten zusammen, teilen/kopieren)
+- 🌍 **Entdecken**: Hunderte weitere Rezepte aus [TheMealDB](https://www.themealdb.com) (kostenlos, ohne Anmeldung) – nach Kategorie (Vegetarisch, Vegan, Fisch, Pasta …), Zutat (auch auf Deutsch, z. B. „Kürbis“) oder Zufall. Mengen werden automatisch in g/ml/EL umgerechnet, Anleitungen sind auf Englisch (Übersetzen-Knopf). Mit „Ins Buch übernehmen“ landen sie offline im eigenen Rezeptbuch.
 - Eigene Rezepte anlegen, Sicherung als Datei
 
 Läuft als installierbare Web-App über GitHub Pages, auch offline.

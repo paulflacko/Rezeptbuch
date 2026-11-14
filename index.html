@@ -56,7 +56,7 @@ button{cursor:pointer}
 
 /* Tabs */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
-  display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
+  display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom)}
 .tabs button{border:0;background:none;padding:8px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.75rem;color:var(--muted);font-weight:500;position:relative}
 .tabs button .i{font-size:1.35rem;line-height:1}
 .tabs button[aria-current=page]{color:var(--accent)}
@@ -83,6 +83,7 @@ button{cursor:pointer}
 .tile{flex:none;width:64px;height:64px;border-radius:12px;display:grid;place-items:center;font-size:2rem;background:var(--t-haupt)}
 .tile[data-c=frueh]{background:var(--t-frueh)} .tile[data-c=bowl]{background:var(--t-bowl)} .tile[data-c=suppe]{background:var(--t-suppe)}
 .tile[data-c=snack]{background:var(--t-snack)} .tile[data-c=suess]{background:var(--t-suess)}
+.tile.photo{overflow:hidden;background:var(--surface-2)} .tile.photo img{width:100%;height:100%;object-fit:cover;display:block}
 .card .body{flex:1;min-width:0}
 .card h3{font-size:1rem;margin-bottom:4px}
 .meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.8rem;color:var(--muted);align-items:center}
@@ -199,6 +200,7 @@ dialog::backdrop{background:rgb(20 15 5 / .45)}
 
 <nav class="tabs" aria-label="Bereiche">
   <button data-tab="rezepte"><span class="i">📖</span>Rezepte</button>
+  <button data-tab="entdecken"><span class="i">🌍</span>Entdecken</button>
   <button data-tab="woche"><span class="i">🗓️</span>Woche</button>
   <button data-tab="einkauf"><span class="i">🛒</span>Einkauf<span class="badge" id="shopBadge" hidden></span></button>
   <button data-tab="mehr"><span class="i">⚙️</span>Mehr</button>
@@ -210,6 +212,7 @@ dialog::backdrop{background:rgb(20 15 5 / .45)}
 <dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
 
 <script src="recipes.js"></script>
+<script src="discover.js"></script>
 <script>
 "use strict";
 /* ---------- Grundlagen ---------- */
@@ -262,8 +265,8 @@ function filtered(){
     if (f.cat && r.c !== f.cat) return false;
     for (const fl of f.flags) {
       if (fl === 'af' && !r.tools.includes('af')) return false;
-      if (fl === 'q15' && r.min > 15) return false;
-      if (fl === 'q25' && r.min > 25) return false;
+      if (fl === 'q15' && (r.min ?? 999) > 15) return false;
+      if (fl === 'q25' && (r.min ?? 999) > 25) return false;
       if (fl === 'mp' && !r.mp) return false;
       if (fl === 'fav' && !S.fav.includes(r.id)) return false;
     }
@@ -275,11 +278,13 @@ function filtered(){
   });
 }
 
+const minTxt = r => r.min ? r.min + ' Min' : 'k. A.';
+const tile = r => r.img ? `<span class="tile photo"><img loading="lazy" src="${esc(r.img)}/small" alt=""></span>` : `<span class="tile" data-c="${r.c}" aria-hidden="true">${esc(r.e || '🍽️')}</span>`;
 function card(r){
   return `<button class="card" data-open="${esc(r.id)}">
-    <span class="tile" data-c="${r.c}" aria-hidden="true">${esc(r.e || '🍽️')}</span>
+    ${tile(r)}
     <span class="body"><h3>${esc(r.t)}</h3>
-      <span class="meta"><span>⏱ ${r.min} Min</span><span class="dot d-${r.d}">${DIET[r.d]}</span>${r.tools.includes('af') ? '<span class="af">🔥 Airfryer</span>' : ''}${S.fav.includes(r.id) ? '<span class="fav">★</span>' : ''}</span>
+      <span class="meta"><span>⏱ ${minTxt(r)}</span><span class="dot d-${r.d}">${DIET[r.d]}</span>${r.tools.includes('af') ? '<span class="af">🔥 Airfryer</span>' : ''}${S.fav.includes(r.id) ? '<span class="fav">★</span>' : ''}</span>
     </span></button>`;
 }
 
@@ -403,7 +408,8 @@ function viewMehr(){
 /* ---------- Detail ---------- */
 let current = null;
 function openDetail(id){
-  const r = byId(id); if (!r) return;
+  const r = typeof id === 'object' ? id : byId(id); if (!r) return;
+  const inBook = !r.en || S.own.some(x => x.id === r.id);
   current = r;
   const p = portionsOf(r), f = p / r.p, d = $('#detail');
   const inWeek = Object.entries(S.week).flatMap(([i, s]) => Object.entries(s).filter(([, v]) => v === r.id).map(([k]) => DAYS[i].slice(0,2) + ' ' + (k === 'm' ? 'Mittag' : 'Abend')));
@@ -414,20 +420,22 @@ function openDetail(id){
       <button class="iconbtn" id="favBtn" aria-pressed="${S.fav.includes(r.id)}" aria-label="Favorit">${S.fav.includes(r.id) ? '★' : '☆'}</button>
     </div></div>
     <div class="wrap">
-      <div class="hero"><span class="tile" data-c="${r.c}" aria-hidden="true">${esc(r.e || '🍽️')}</span>
-        <div><p class="muted small">${CATS[r.c] || ''}${r.own ? ' · eigenes Rezept' : ''}</p><h2>${esc(r.t)}</h2></div></div>
+      <div class="hero">${r.img ? `<span class="tile photo"><img src="${esc(r.img)}" alt=""></span>` : `<span class="tile" data-c="${r.c}" aria-hidden="true">${esc(r.e || '🍽️')}</span>`}
+        <div><p class="muted small">${CATS[r.c] || ''}${r.en ? ' · TheMealDB' + (r.area ? ' · ' + esc(r.area) : '') : r.own ? ' · eigenes Rezept' : ''}</p><h2>${esc(r.t)}</h2></div></div>
       <div class="facts">
-        <span class="fact"><b>Zeit</b>${r.min} Min</span>
+        <span class="fact"><b>Zeit</b>${r.min ? (r.en ? 'ca. ' : '') + r.min + ' Min' : 'k. A.'}</span>
         <span class="fact"><b>Ernährung</b><span class="dot d-${r.d}">${DIET[r.d]}</span></span>
         ${r.af ? `<span class="fact afbox"><b>Heißluftfritteuse</b><span class="af">🔥 ${esc(r.af)}</span></span>` : ''}
         <span class="fact"><b>Geräte</b>${r.tools.map(t => TOOLS[t]).join(', ')}</span>
         ${r.mp ? '<span class="fact"><b>Meal Prep</b>📦 gut vorzubereiten</span>' : ''}
       </div>
       <div class="actions">
-        <button class="btn primary" id="toWeek">🗓️ In den Wochenplan</button>
+        ${inBook ? '' : '<button class="btn primary" id="saveRemote">📥 Ins Buch übernehmen</button>'}
+        <button class="btn ${inBook ? 'primary' : ''}" id="toWeek">🗓️ In den Wochenplan</button>
         <button class="btn" id="toShop">🛒 Einkaufsliste</button>
         <button class="btn" id="cookMode" aria-pressed="false">📱 Bildschirm anlassen</button>
-        ${r.own ? '<button class="btn" id="editOwn">✏️ Bearbeiten</button>' : ''}
+        ${r.own && !r.en ? '<button class="btn" id="editOwn">✏️ Bearbeiten</button>' : ''}
+        ${r.own && r.en ? '<button class="btn ghost danger" id="delRemote">Aus dem Buch entfernen</button>' : ''}
       </div>
       ${inWeek.length ? `<p class="small muted" style="margin:-8px 0 14px">Eingeplant: ${inWeek.join(', ')}</p>` : ''}
       <div class="cols">
@@ -445,6 +453,8 @@ function openDetail(id){
           </div>
           ${r.tip ? `<div class="note tip"><b>💡 Tipp</b>${esc(r.tip)}</div>` : ''}
           ${r.swap ? `<div class="note swap"><b>🌱 Veggie-Tausch</b>${esc(r.swap)}</div>` : ''}
+          ${r.en ? `<div class="note tip"><b>🌍 Original auf Englisch</b>Portionen sind geschätzt (meist 4). Mengen wurden in g/ml/EL umgerechnet.
+            <div class="actions" style="margin:10px 0 0"><a class="btn sm" target="_blank" rel="noopener" href="https://translate.google.com/?sl=en&tl=de&op=translate&text=${encodeURIComponent(r.st.map((s, i) => (i + 1) + '. ' + (Array.isArray(s) ? s[0] : s)).join('\n').slice(0, 4500))}">🇩🇪 Anleitung übersetzen</a>${r.yt ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(r.yt)}">▶️ Video</a>` : ''}${r.link ? `<a class="btn sm ghost" target="_blank" rel="noopener" href="${esc(r.link)}">Quelle</a>` : ''}</div></div>` : ''}
         </div>
       </div>
     </div>`;
@@ -551,15 +561,16 @@ function ownForm(r){
 }
 
 /* ---------- Routing ---------- */
-function tab(){ const h = location.hash.replace('#', ''); return ['rezepte','woche','einkauf','mehr'].includes(h.split('/')[0]) ? h.split('/')[0] : 'rezepte'; }
+function tab(){ const h = location.hash.replace('#', ''); return ['rezepte','entdecken','woche','einkauf','mehr'].includes(h.split('/')[0]) ? h.split('/')[0] : 'rezepte'; }
 let lastTab = null;
 function render(){
   const h = location.hash;
   if (h.startsWith('#r/')) { openDetail(decodeURIComponent(h.slice(3))); return; }
+  if (h.startsWith('#m/')) { openMeal(decodeURIComponent(h.slice(3))); return; }
   closeDetail();
   const t = tab();
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === t ? 'page' : 'false'));
-  ({rezepte: viewRezepte, woche: viewWoche, einkauf: viewEinkauf, mehr: viewMehr})[t]();
+  ({rezepte: viewRezepte, entdecken: viewEntdecken, woche: viewWoche, einkauf: viewEinkauf, mehr: viewMehr})[t]();
   if (lastTab !== t) window.scrollTo(0, 0);
   lastTab = t;
 }
@@ -572,7 +583,12 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button, [data-open]'); if (!b) return;
   const ds = b.dataset;
   if (ds.tab) { baseTab = '#' + ds.tab; go(baseTab); return; }
-  if (ds.open) { if (!location.hash.startsWith('#r/')) baseTab = location.hash || '#rezepte'; inApp = true; location.hash = '#r/' + encodeURIComponent(ds.open); return; }
+  if (ds.open) { if (!/^#[rm]\//.test(location.hash)) baseTab = location.hash || '#rezepte'; inApp = true; location.hash = '#r/' + encodeURIComponent(ds.open); return; }
+  if (ds.meal) { if (!location.hash.startsWith('#m/') && !location.hash.startsWith('#r/')) baseTab = location.hash || '#entdecken'; inApp = true; location.hash = '#m/' + ds.meal; return; }
+  if (ds.dcat) { disc.cat = ds.dcat; disc.q = ''; S.discCat = ds.dcat; save(); const i = $('#dq2'); if (i) i.value = ''; loadDisc(); return; }
+  if (ds.drandom) { inApp = true; baseTab = '#entdecken'; discRandom(ds.drandom); return; }
+  if (b.id === 'saveRemote' && current) { saveRemote(current); toast('Im Rezeptbuch gespeichert'); openDetail(byId(current.id)); return; }
+  if (b.id === 'delRemote' && current) { if (!confirm('Aus deinem Buch entfernen?')) return; S.own = S.own.filter(x => x.id !== current.id); S.fav = S.fav.filter(x => x !== current.id); save(); toast('Entfernt'); openDetail({...current, own: false}); return; }
   if (b.id === 'back') { if (inApp) { inApp = false; history.back(); } else go(baseTab); return; }
   if ('close' in ds) { dlg.close(); return; }
   const f = S.filters;
@@ -586,8 +602,9 @@ document.addEventListener('click', e => {
   if (b.id === 'rnd') { const l = filtered(); if (!l.length) return toast('Keine Rezepte in der Auswahl'); location.hash = '#r/' + encodeURIComponent(l[Math.floor(Math.random() * l.length)].id); return; }
   if (b.id === 'themeBtn') { const order = ['auto','light','dark']; S.theme = order[(order.indexOf(S.theme) + 1) % 3]; applyTheme(); save(); toast({auto:'Design: automatisch',light:'Design: hell',dark:'Design: dunkel'}[S.theme]); return; }
   // Detail
+  if ((b.id === 'favBtn' || b.id === 'toWeek') && current && saveRemote(current)) toast('Auch ins Buch übernommen');
   if (b.id === 'favBtn' && current) { const i = S.fav.indexOf(current.id); i >= 0 ? S.fav.splice(i, 1) : S.fav.push(current.id); save(); b.textContent = i >= 0 ? '☆' : '★'; toast(i >= 0 ? 'Aus Favoriten entfernt' : 'Zu Favoriten hinzugefügt'); return; }
-  if (ds.port && current) { const p = Math.max(1, Math.min(12, portionsOf(current) + +ds.port)); S.portions[current.id] = p; save(); const y = $('#detail').scrollTop; openDetail(current.id); $('#detail').scrollTop = y; return; }
+  if (ds.port && current) { const p = Math.max(1, Math.min(12, portionsOf(current) + +ds.port)); S.portions[current.id] = p; save(); const y = $('#detail').scrollTop; openDetail(current); $('#detail').scrollTop = y; return; }
   if (b.id === 'toShop' && current) { const n = addToShop(current, portionsOf(current)); toast(`${n} Zutaten auf der Einkaufsliste`); return; }
   if (b.id === 'toWeek' && current) { planDialog(current.id); return; }
   if (b.id === 'cookMode') { toggleWake(b); return; }
@@ -596,7 +613,7 @@ document.addEventListener('click', e => {
   if (ds.tstop) { const i = timers.findIndex(t => t.id == ds.tstop); if (i >= 0) { clearInterval(timers[i].rep); timers.splice(i, 1); } renderTimers(); return; }
   if (ds.tadd) { const t = timers.find(t => t.id == ds.tadd); if (t) { if (t.ring) { t.ring = false; clearInterval(t.rep); t.end = Date.now(); } t.end += 60000; } renderTimers(); return; }
   // Woche
-  if (ds.pickslot) { const [i, k] = ds.pickslot.split(':'); (S.week[i] ||= {})[k] = ds.rid; save(); dlg.close(); toast(`Eingeplant: ${DAYS[i]}, ${k === 'm' ? 'Mittag' : 'Abend'}`); if (current) { const y = $('#detail').scrollTop; openDetail(current.id); $('#detail').scrollTop = y; } return; }
+  if (ds.pickslot) { const [i, k] = ds.pickslot.split(':'); (S.week[i] ||= {})[k] = ds.rid; save(); dlg.close(); toast(`Eingeplant: ${DAYS[i]}, ${k === 'm' ? 'Mittag' : 'Abend'}`); if (current) { const y = $('#detail').scrollTop; openDetail(current); $('#detail').scrollTop = y; } return; }
   if (ds.plan) { chooseRecipeDialog(ds.plan); return; }
   if (ds.setslot) { const [i, k] = ds.setslot.split(':'); (S.week[i] ||= {})[k] = ds.rid; save(); dlg.close(); viewWoche(); return; }
   if (ds.unplan) { const [i, k] = ds.unplan.split(':'); delete S.week[i]?.[k]; save(); viewWoche(); return; }
